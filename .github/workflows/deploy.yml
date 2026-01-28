@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ЭТАП 1: Проверка кода (из твоего старого ci.yml)
+  # ЭТАП 1: Проверка
   validate:
     runs-on: ubuntu-latest
     steps:
@@ -22,13 +22,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint (Проверка стиля кода)
+      - name: Run ESLint
         run: npm run lint
 
-      - name: Run TypeScript check (Проверка типов)
+      - name: Run TypeScript check
         run: npx tsc --noEmit
 
-  # ЭТАП 2: Сборка и пуш (выполнится только если ЭТАП 1 прошел успешно)
+  # ЭТАП 2: Сборка и Уведомление
   build-and-push:
     needs: validate
     runs-on: ubuntu-latest
@@ -53,9 +53,20 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
-          # Вшиваем все твои секреты прямо в билд
           build-args: |
             VITE_API_URL=${{ secrets.VITE_API_URL }}
             VITE_APP_LOGO=${{ secrets.VITE_APP_LOGO }}
             VITE_APP_NAME=${{ secrets.VITE_APP_NAME }}
             VITE_TELEGRAM_BOT_USERNAME=${{ secrets.VITE_TELEGRAM_BOT_USERNAME }}
+
+      - name: Send Telegram Notification
+        if: success()
+        run: |
+          # Все данные теперь в секретах
+          MESSAGE="<b>Safexess VPN Bot</b>%0A✅ <b>Build finished</b>%0A%0A📦 <b>Repository:</b> ${{ github.repository }}%0A🏹 <b>Workflow:</b> ${{ github.workflow }}%0A🏷️ <b>Branch:</b> ${{ github.ref_name }}%0A🔨 <b>Commit Message:</b> ${{ github.event.head_commit.message }}"
+          
+          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d "message_thread_id=${{ secrets.TELEGRAM_TOPIC_ID }}" \
+          -d "parse_mode=HTML" \
+          -d "text=$MESSAGE"
