@@ -207,8 +207,12 @@ export default function Wheel() {
   const starsInvoiceMutation = useMutation({
     mutationFn: wheelApi.createStarsInvoice,
     onSuccess: (data) => {
-      if (window.Telegram?.WebApp?.openInvoice) {
-        window.Telegram.WebApp.openInvoice(data.invoice_url, async (status) => {
+      const webApp = window.Telegram?.WebApp;
+      // openInvoice requires WebApp version 6.1+
+      const supportsInvoice =
+        webApp?.openInvoice && webApp?.isVersionAtLeast && webApp.isVersionAtLeast('6.1');
+      if (supportsInvoice) {
+        webApp.openInvoice(data.invoice_url, async (status) => {
           if (status === 'paid') {
             // Mark this as a Stars spin so handleSpinComplete knows to use the pending result
             isStarsSpinRef.current = true;
@@ -295,20 +299,21 @@ export default function Wheel() {
           }
         });
       } else {
-        // openInvoice not available - show error
+        // Fallback: open invoice URL in Telegram (browser or unsupported WebApp version)
         setIsPayingStars(false);
+        window.open(data.invoice_url, '_blank', 'noopener,noreferrer');
         setSpinResult({
-          success: false,
+          success: true,
           prize_id: null,
           prize_type: null,
           prize_value: 0,
           prize_display_name: '',
-          emoji: '😔',
-          color: '#EF4444',
+          emoji: '⭐',
+          color: '#8B5CF6',
           rotation_degrees: 0,
-          message: t('wheel.errors.starsNotAvailable'),
+          message: t('wheel.starsPaymentRedirected'),
           promocode: null,
-          error: 'stars_not_available',
+          error: null,
         });
         setShowResultModal(true);
       }
