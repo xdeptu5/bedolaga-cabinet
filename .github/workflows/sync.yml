@@ -3,17 +3,17 @@ name: Auto Sync Fork
 on:
   schedule:
     - cron: '0 * * * *' # Проверка каждый час
-  workflow_dispatch: # Чтобы можно было тыкнуть кнопку руками
+  workflow_dispatch: # Чтобы можно было запустить кнопкой
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      # 1. СКАЧИВАЕМ РЕПО (без этого будет ошибка 128, как на скрине)
+      # ШАГ 1: Это самое главное! Скачиваем твою репу, чтобы не было ошибки 128
       - name: Checkout target repo
         uses: actions/checkout@v4
 
-      # 2. СИНХРОНИЗИРУЕМ
+      # ШАГ 2: Синхронизируем с правильными именами параметров для v3.4.1
       - name: Sync with Upstream
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
         with:
@@ -23,11 +23,11 @@ jobs:
           upstream_sync_branch: main
           test_mode: false
 
-      # 3. ОТЧЕТ ОБ ОШИБКЕ (в твоем стиле)
+      # ШАГ 3: Если вдруг синхронизация не прошла (конфликт) — бот напишет тебе
       - name: Send Sync Error to Telegram
         if: failure()
         run: |
-          MESSAGE="<b>Safexess VPN Bot</b>%0A❌ <b>Sync Failed</b>%0A%0A📦 <b>Repository:</b> ${{ github.repository }}%0A🏹 <b>Workflow:</b> ${{ github.workflow }}%0A🏷️ <b>Branch:</b> ${{ github.ref_name }}%0A⚠️ <b>Status:</b> Конфликт! Нужно зайти в GitHub и разрулить руками."
+          MESSAGE="<b>Safexess VPN Bot</b>%0A❌ <b>Sync Failed</b>%0A%0A📦 <b>Repository:</b> ${{ github.repository }}%0A⚠️ <b>Status:</b> Ошибка синхронизации. Проверь конфликты!"
           
           curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
