@@ -23,6 +23,12 @@ export interface WSMessage {
   new_expires_at?: string;
   tariff_name?: string;
   days_left?: number;
+  // Device purchase events
+  devices_added?: number;
+  new_device_limit?: number;
+  // Traffic purchase events
+  traffic_gb_added?: number;
+  new_traffic_limit_gb?: number;
   // Autopay events
   required_kopeks?: number;
   required_rubles?: number;
