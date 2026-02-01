@@ -3,18 +3,21 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ "main" ]
-    # Добавляем вот этот блок сюда:
     paths-ignore:
       - '.github/workflows/**'
       - 'README.md'
   workflow_dispatch:
 
 jobs:
-  # ЭТАП 1: Проверка
-  validate:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      actions: write
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -26,23 +29,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint
-        run: npm run lint
+      - name: Run Validation (Lint & TS)
+        run: |
+          npm run lint
+          npx tsc --noEmit
 
-      - name: Run TypeScript check
-        run: npx tsc --noEmit
-
-  # ЭТАП 2: Сборка и Уведомление
-  build-and-push:
-    needs: validate
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -57,16 +50,26 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             VITE_API_URL=${{ secrets.VITE_API_URL }}
             VITE_APP_LOGO=${{ secrets.VITE_APP_LOGO }}
             VITE_APP_NAME=${{ secrets.VITE_APP_NAME }}
             VITE_TELEGRAM_BOT_USERNAME=${{ secrets.VITE_TELEGRAM_BOT_USERNAME }}
 
+      # ШАГ ОЧИСТКИ: Удаляет старые версии пакета
+      - name: Cleanup old versions
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'bedolaga-cabinet'
+          package-type: 'container'
+          min-versions-to-keep: 5 # Оставляет 5 последних сборок
+          delete-only-untagged-versions: 'false'
+
       - name: Send Telegram Notification
         if: success()
         run: |
-          # Все данные теперь в секретах
           MESSAGE="<b>Safexess VPN Bot</b>%0A✅ <b>Build finished</b>%0A%0A📦 <b>Repository:</b> ${{ github.repository }}%0A🏹 <b>Workflow:</b> ${{ github.workflow }}%0A🏷️ <b>Branch:</b> ${{ github.ref_name }}%0A🔨 <b>Commit Message:</b> ${{ github.event.head_commit.message }}"
           
           curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
