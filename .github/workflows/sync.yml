@@ -2,52 +2,62 @@ name: Auto Sync Fork
 
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+    - cron: '0 * * * *' # Каждые 60 минут
+  workflow_dispatch: # Можно тыкнуть кнопку вручную
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    # Даем права на запись, чтобы Гитхаб разрешил пуш в твою ветку
+    # Даем права на запись контента и управление воркфлоу (для пинка деплоя)
     permissions:
       contents: write
+      actions: write
     
     steps:
+      # 1. Забираем твой код
       - name: Checkout target repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Качаем всю историю для мерджа
+          fetch-depth: 0
 
+      # 2. Втягиваем обновления от разработчика
       - name: Sync logic
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           
-          # Добавляем разраба как источник
           git remote add upstream https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git
           git fetch upstream main
           
-          # Пытаемся слить изменения
+          # Сливаем изменения. Если будут конфликты — шаг упадет.
           git merge upstream/main --no-edit || (echo "CONFLICT DETECTED" && exit 1)
           
-          # Если все ок — пушим в твой репозиторий
           git push origin main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # 3. ПИНАЕМ ДЕПЛОЙ (Тот самый шаг, которого не хватало)
+      - name: Trigger Deploy Pipeline
+        if: success()
+        run: |
+          echo "Запускаю CI/CD Pipeline..."
+          gh workflow run "CI/CD Pipeline" --ref main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 4. Уведомление в Телеграм (в твой топик)
       - name: Send Notification
         if: always()
         run: |
-          # Выбираем иконку в зависимости от успеха
           if [ "${{ job.status }}" = "success" ]; then
             ICON="✅"
-            STATUS="Sync Successful"
+            STATUS="Sync & Trigger Successful"
           else
             ICON="❌"
-            STATUS="Sync Failed (Conflict or Error)"
+            STATUS="Sync Failed (Check Conflicts)"
           fi
 
-          MESSAGE="<b>Safexess VPN Bot</b>%0A$ICON <b>$STATUS</b>%0A%0A📦 <b>Repository:</b> ${{ github.repository }}%0A🔨 <b>Workflow:</b> ${{ github.workflow }}"
+          MESSAGE="<b>Safexess VPN Bot</b>%0A$ICON <b>$STATUS</b>%0A%0A📦 <b>Repository:</b> ${{ github.repository }}%0A🏹 <b>Workflow:</b> ${{ github.workflow }}"
           
           curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
