@@ -19,21 +19,18 @@ jobs:
           fetch-depth: 0
 
       - name: Sync logic
-        id: sync_step # Добавляем ID, чтобы вытащить результат
+        id: sync_step
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           
-          # Запоминаем текущий хеш коммита
           OLD_HASH=$(git rev-parse HEAD)
           
           git remote add upstream https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git
           git fetch upstream main
           
-          # Пытаемся слить изменения
           git merge upstream/main --no-edit || (echo "CONFLICT" && exit 1)
           
-          # Проверяем, изменился ли хеш после мерджа
           NEW_HASH=$(git rev-parse HEAD)
           
           if [ "$OLD_HASH" != "$NEW_HASH" ]; then
@@ -48,28 +45,23 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trigger Deploy Pipeline
-        # Запускаем, только если sync_step подтвердил наличие изменений
         if: steps.sync_step.outputs.has_changes == 'true'
         run: |
           echo "Запускаю сборку..."
-          # Используем имя ФАЙЛА воркфлоу вместо его названия
           gh workflow run deploy.yml --ref main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Send Notification
-        if: always()
+        # Условие: только если есть изменения ИЛИ если возникла ошибка
+        if: steps.sync_step.outputs.has_changes == 'true' || failure()
         run: |
           if [ "${{ job.status }}" = "failure" ]; then
             ICON="❌"
             STATUS="Sync Failed (Conflict)"
-          elif [ "${{ steps.sync_step.outputs.has_changes }}" = "true" ]; then
+          else
             ICON="✅"
             STATUS="Sync & Deploy Triggered"
-          else
-            # Если изменений не было, можно либо молчать, либо слать "Idle"
-            ICON="💤"
-            STATUS="No updates found"
           fi
 
           MESSAGE="<b>Safexess VPN Bot</b>%0A$ICON <b>$STATUS</b>%0A%0A📦 <b>Repository:</b> ${{ github.repository }}"
