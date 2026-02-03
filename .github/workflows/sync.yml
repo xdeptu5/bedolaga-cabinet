@@ -2,8 +2,8 @@ name: Auto Sync Fork
 
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+    - cron: '0 * * * *' # Проверка каждый час
+  workflow_dispatch: # Кнопка для ручного запуска
 
 jobs:
   sync:
@@ -29,7 +29,7 @@ jobs:
           git remote add upstream https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git
           git fetch upstream main
           
-          # Обычный мердж изменений от разработчика
+          # Попытка мерджа
           git merge upstream/main --no-edit || (echo "CONFLICT=true" >> $GITHUB_ENV && exit 1)
           
           git push origin main
@@ -48,18 +48,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Теперь команда бьёт точно в твой форк, исправляя ошибку 404
+          # Запуск деплоя в твоем репо
           gh workflow run deploy.yml --ref main --repo ${{ github.repository }}
 
       - name: Send Notification
-        if: always()
+        # Условие: слать только если была ошибка ИЛИ если реально есть изменения
+        if: failure() || steps.sync_step.outputs.has_changes == 'true'
         run: |
-          if [ "${{ job.status }}" = "success" ] && [ "${{ steps.sync_step.outputs.has_changes }}" = "true" ]; then
+          if [ "${{ job.status }}" = "success" ]; then
             ICON="✅"
             STATUS="Sync & Deploy Started"
-          elif [ "${{ steps.sync_step.outputs.has_changes }}" = "false" ]; then
-            ICON="💤"
-            STATUS="No updates"
           else
             ICON="❌"
             STATUS="Sync Failed"
