@@ -34,6 +34,11 @@ jobs:
           npm run lint
           npx tsc --noEmit
 
+      # ДОСТАЕМ ВЕРСИЮ ИЗ package.json
+      - name: Get version
+        id: package_version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -49,7 +54,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ steps.package_version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -58,22 +65,25 @@ jobs:
             VITE_APP_NAME=${{ secrets.VITE_APP_NAME }}
             VITE_TELEGRAM_BOT_USERNAME=${{ secrets.VITE_TELEGRAM_BOT_USERNAME }}
 
-      # ШАГ ОЧИСТКИ: Удаляет старые версии пакета
       - name: Cleanup old versions
         uses: actions/delete-package-versions@v5
         with:
           package-name: 'bedolaga-cabinet'
           package-type: 'container'
-          min-versions-to-keep: 5 # Оставляет 5 последних сборок
+          min-versions-to-keep: 5
           delete-only-untagged-versions: 'false'
 
       - name: Send Telegram Notification
         if: success()
         run: |
-          MESSAGE="<b>Safexess VPN Bot</b>%0A✅ <b>Build finished</b>%0A%0A📦 <b>Repository:</b> ${{ github.repository }}%0A🏹 <b>Workflow:</b> ${{ github.workflow }}%0A🏷️ <b>Branch:</b> ${{ github.ref_name }}%0A🔨 <b>Commit Message:</b> ${{ github.event.head_commit.message }}"
+          MESSAGE="<b>Safexess VPN Bot</b>
+          ✅ <b>Build finished</b> (v${{ steps.package_version.outputs.version }})
+          
+          📦 <b>Repo:</b> ${{ github.repository }}
+          🔨 <b>Commit:</b> ${{ github.event.head_commit.message }}"
           
           curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
           -d "message_thread_id=${{ secrets.TELEGRAM_TOPIC_ID }}" \
           -d "parse_mode=HTML" \
-          -d "text=$MESSAGE"
+          --data-urlencode "text=$MESSAGE"
