@@ -17,6 +17,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Используем твой личный токен для авторизации
+          token: ${{ secrets.MY_TOKEN }}
 
       - name: Standard Merge Sync
         id: sync_step
@@ -29,9 +31,10 @@ jobs:
           git remote add upstream https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git
           git fetch upstream main
           
-          # Обычный мердж
+          # Мерджим изменения (включая новые файлы воркфлоу)
           git merge upstream/main --no-edit || (echo "Merge failed" && exit 1)
           
+          # Теперь пуш пройдет, так как у MY_TOKEN есть права на workflows
           git push origin main
           
           NEW_HASH=$(git rev-parse HEAD)
@@ -41,18 +44,17 @@ jobs:
             echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Здесь тоже используем MY_TOKEN
+          GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
 
       - name: Trigger Deploy Pipeline
         if: steps.sync_step.outputs.has_changes == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.MY_TOKEN }}
         run: |
-          # Запуск деплоя в твоем репо
           gh workflow run deploy.yml --ref main --repo ${{ github.repository }}
 
       - name: Send Success Notification
-        # Бот напишет ТОЛЬКО если есть изменения
         if: success() && steps.sync_step.outputs.has_changes == 'true'
         run: |
           MESSAGE="<b>Safexess VPN Bot</b>
@@ -67,11 +69,10 @@ jobs:
           --data-urlencode "text=$MESSAGE"
 
       - name: Send Failure Notification
-        # Бот напишет, если синхронизация сломалась
         if: failure()
         run: |
           MESSAGE="<b>Safexess VPN Bot</b>
-          ❌ <b>Sync Failed (Conflict or Error)</b>
+          ❌ <b>Sync Failed (Workflow Permission Required)</b>
           
           📦 <b>Repo:</b> ${{ github.repository }}"
           
