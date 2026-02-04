@@ -17,8 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Используем твой личный токен для авторизации
-          token: ${{ secrets.MY_TOKEN }}
+          token: ${{ secrets.MY_TOKEN }} # Твой PAT для обновления воркфлоу
 
       - name: Standard Merge Sync
         id: sync_step
@@ -27,14 +26,13 @@ jobs:
           git config --global user.email "action@github.com"
           
           OLD_HASH=$(git rev-parse HEAD)
-          
           git remote add upstream https://github.com/BEDOLAGA-DEV/bedolaga-cabinet.git
           git fetch upstream main
           
-          # Мерджим изменения (включая новые файлы воркфлоу)
+          # Обычный мердж (Update branch)
           git merge upstream/main --no-edit || (echo "Merge failed" && exit 1)
           
-          # Теперь пуш пройдет, так как у MY_TOKEN есть права на workflows
+          # Пушим с твоим токеном
           git push origin main
           
           NEW_HASH=$(git rev-parse HEAD)
@@ -44,7 +42,6 @@ jobs:
             echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
         env:
-          # Здесь тоже используем MY_TOKEN
           GITHUB_TOKEN: ${{ secrets.MY_TOKEN }}
 
       - name: Trigger Deploy Pipeline
@@ -54,25 +51,19 @@ jobs:
         run: |
           gh workflow run deploy.yml --ref main --repo ${{ github.repository }}
 
-      - name: Send Success Notification
-        if: success() && steps.sync_step.outputs.has_changes == 'true'
+      - name: Send Notification
+        if: failure() || steps.sync_step.outputs.has_changes == 'true'
         run: |
-          MESSAGE="<b>Safexess VPN Bot</b>
-          ✅ <b>Sync & Deploy Started</b>
-          
-          📦 <b>Repo:</b> ${{ github.repository }}"
-          
-          curl -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-          -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-          -d "message_thread_id=${{ secrets.TELEGRAM_TOPIC_ID }}" \
-          -d "parse_mode=HTML" \
-          --data-urlencode "text=$MESSAGE"
+          if [ "${{ job.status }}" = "success" ]; then
+            ICON="✅"
+            STATUS="Sync & Deploy Started"
+          else
+            ICON="❌"
+            STATUS="Sync Failed"
+          fi
 
-      - name: Send Failure Notification
-        if: failure()
-        run: |
           MESSAGE="<b>Safexess VPN Bot</b>
-          ❌ <b>Sync Failed (Workflow Permission Required)</b>
+          $ICON <b>$STATUS</b>
           
           📦 <b>Repo:</b> ${{ github.repository }}"
           
