@@ -24,7 +24,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          # Кэш npm отключен для гарантированно чистой установки зависимостей
+          # cache: 'npm' 
 
       - name: Install dependencies
         run: npm ci
@@ -34,7 +35,6 @@ jobs:
           npm run lint
           npx tsc --noEmit
 
-      # ДОСТАЕМ ВЕРСИЮ ИЗ package.json
       - name: Get version
         id: package_version
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
@@ -54,11 +54,10 @@ jobs:
         with:
           context: .
           push: true
+          # КЭШ ПОЛНОСТЬЮ ОТКЛЮЧЕН: образ будет пересобираться с нуля каждый раз
           tags: |
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ steps.package_version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           build-args: |
             VITE_API_URL=${{ secrets.VITE_API_URL }}
             VITE_APP_LOGO=${{ secrets.VITE_APP_LOGO }}
