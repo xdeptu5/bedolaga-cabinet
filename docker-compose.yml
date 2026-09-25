@@ -8,6 +8,8 @@
           VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME}
           VITE_APP_NAME: ${VITE_APP_NAME:-Cabinet}
           VITE_APP_LOGO: ${VITE_APP_LOGO:-V}
+      container_name: cabinet_frontend
+      restart: unless-stopped
       env_file:
         - .env
       networks:
